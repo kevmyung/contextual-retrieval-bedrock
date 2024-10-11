@@ -1,0 +1,18 @@
+models:
+  Claude 3.5 Sonnet:
+    model_id: "anthropic.claude-3-5-sonnet-20240620-v1:0"
+    input_format: "list_of_dicts"
+  Claude 3 Haiku:
+    model_id: "anthropic.claude-3-haiku-20240307-v1:0"
+    input_format: "list_of_dicts"
+
+embedding_models:
+  Titan Embeddings:
+    model_id: "amazon.titan-embed-text-v2:0"
+    dimension: 1024
+  Cohere Embed Multilingual:
+    model_id: "cohere.embed-multilingual-v3"
+    dimension: 1024
+  Cohere Embed English:
+    model_id: "cohere.embed-english-v3"
+    dimension: 1024

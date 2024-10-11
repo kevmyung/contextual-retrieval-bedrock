@@ -1,0 +1,25 @@
+index_mapping:
+  properties:
+    metadata:
+      properties:
+        doc_name:
+          type: keyword
+        source:
+          type: keyword
+        type:
+          type: keyword
+        timestamp:
+          type: date
+    text:
+      type: text
+      analyzer: nori
+    vector_field:
+      type: knn_vector
+      dimension: 1024
+      method:
+        engine: faiss
+        name: hnsw
+        parameters:
+          ef_construction: 512
+          m: 16
+        space_type: l2
