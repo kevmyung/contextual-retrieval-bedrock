@@ -45,6 +45,7 @@ def initialize_session_state():
 
     if st.session_state.search_target is None and st.session_state.os_manager.index_list:
         st.session_state.search_target = st.session_state.os_manager.index_list[0]
+        st.session_state.os_manager.set_content_field(st.session_state.search_target)
 
 def load_model_config():
     file_dir = os.path.dirname(os.path.abspath(__file__))
@@ -118,11 +119,15 @@ def search_toolbar():
     with st.popover("Search Settings"):
         index_list = st.session_state.os_manager.index_list
         if index_list:
-            st.session_state.search_target = st.selectbox(
+            selected_index = st.selectbox(
                 "Search Target (Index Name)",
                 options=index_list,
                 index=0 if "search_target" not in st.session_state or st.session_state.search_target not in index_list else index_list.index(st.session_state.search_target),
+                key="search_target_input"
             )
+            if selected_index != st.session_state.search_target:
+                st.session_state.search_target = selected_index
+                st.session_state.os_manager.set_content_field(selected_index)
         else:
             st.warning("No search indices available. Please upload and process a file first.")
             st.session_state.search_target = None
@@ -307,7 +312,7 @@ def upload_toolbar(model_config, embed_model_id):
                     chunk_size, 
                     overlap, 
                     use_context_retrieval, 
-                    context_model=(context_model if use_context_retrieval else None),
+                    context_model=(context_model_id if use_context_retrieval else None),
                     max_document_len=(max_document_len if use_context_retrieval else None)
                 )
                 if re.match(r'^[a-z0-9_]+$', index_name):

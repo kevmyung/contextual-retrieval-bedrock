@@ -22,6 +22,7 @@ class OpenSearch_Manager:
         self.client = self._init_opensearch()
         self.prefix = prefix 
         self.index_list = self._get_indices()
+        self.content_field = 'content'
 
     def _init_opensearch(self):
         try:
@@ -40,6 +41,9 @@ class OpenSearch_Manager:
         except Exception as e:
             logger.error(f"Error initializing OpenSearch: {e}")
             return None
+
+    def set_content_field(self, index_name):
+        self.content_field = 'contextual_content' if 'contextual_' in index_name else 'content'
 
     def _get_mappings(self):
         mapping = {
@@ -63,6 +67,10 @@ class OpenSearch_Manager:
                         }
                     },
                     "content": {
+                        "type": "text",
+                        "analyzer": "standard"
+                    },
+                    "contextual_content": {
                         "type": "text",
                         "analyzer": "standard"
                     },
@@ -133,7 +141,7 @@ class OpenSearch_Manager:
             results = []
             for hit in response['hits']['hits']:
                 result = {
-                    "content": hit['_source']['content'],
+                    "content": hit['_source'][self.content_field],
                     "score": hit['_score'],
                     "metadata": hit['_source']['metadata'],
                     "search_method": query['query'].get('knn', 'bm25')
@@ -156,7 +164,7 @@ class OpenSearch_Manager:
     def search_by_knn(self, vector, index_name, top_n=80):
         query = {
             "size": top_n,
-            "_source": ["content", "metadata"],
+            "_source": [self.content_field, "metadata"],
             "query": {
                 "knn": {
                     "content_embedding": {
@@ -174,10 +182,10 @@ class OpenSearch_Manager:
     def search_by_bm25(self, query_text, index_name, top_n=80):
         query = {
             "size": top_n,
-            "_source": ["content", "metadata"],
+            "_source": [self.content_field, "metadata"],
             "query": {
                 "match": {
-                    "content": {
+                    self.content_field: {
                         "query": query_text,
                         "operator": "or"
                     }
@@ -269,7 +277,7 @@ class OpenSearch_Manager:
                     if 0 <= index < len(hybrid_results):
                         original_doc = hybrid_results[index]
                         final_doc = {
-                            'content': original_doc['content'],
+                            "content": original_doc["content"],
                             'metadata': original_doc['metadata'],
                             'score': reranked_doc['relevance_score'], 
                             'hybrid_score': original_doc['hybrid_score'],
@@ -284,7 +292,7 @@ class OpenSearch_Manager:
         else:
             logger.warning("Reranking failed or returned unexpected format. Using hybrid results.")
             final_results = [{
-                'content': doc['content'],
+                "content": doc["content"],
                 'metadata': doc['metadata'],
                 'score': doc['hybrid_score'],
                 'hybrid_score': doc['hybrid_score'],
@@ -299,8 +307,10 @@ class Context_Processor:
         self.embed_model = embed_model
         self.index_name = index_name
         self.chunk_size = chunk_size
-        self.overlap = overlap
         self.use_context_retrieval = use_context_retrieval 
+        self.overlap = overlap
+        if use_context_retrieval == True:
+            self.overlap = 0 
         self.context_model = context_model 
         self.max_document_len = max_document_len
         self.bedrock_client = self._init_bedrock_client(bedrock_region)
@@ -345,6 +355,7 @@ class Context_Processor:
 
     def _load_and_split(self, file, start_page, end_page):
         documents = []
+        full_text = ""
         with pdfplumber.open(io.BytesIO(file.getvalue())) as pdf:
             total_pages = len(pdf.pages)
             end_page = min(end_page or total_pages, total_pages)
@@ -352,38 +363,88 @@ class Context_Processor:
             for page_num in range(start_page - 1, end_page):
                 text = pdf.pages[page_num].extract_text()
                 text = re.sub(r'\s+', ' ', text).strip()
+                full_text += text + " "
 
-                if self.use_context_retrieval and self.max_document_len:
-                    doc_chunks = self._split_into_chunks(text, self.max_document_len, 0)
-                else:
-                    doc_chunks = [text]
+        if self.use_context_retrieval and self.max_document_len:
+            doc_chunks = self._split_into_chunks(full_text, self.max_document_len, 0)
+        else:
+            doc_chunks = [full_text]
 
-                for doc_index, doc_chunk in enumerate(doc_chunks):
-                    doc_id = f"doc_{page_num+1}_{doc_index+1}"
-                    chunks = self._split_into_chunks(doc_chunk, self.chunk_size, self.overlap)
+        for doc_index, doc_chunk in enumerate(doc_chunks):
+            doc_id = f"doc_{doc_index+1}"
+            chunks = self._split_into_chunks(doc_chunk, self.chunk_size, self.overlap)
 
-                    document_chunks = [
-                        {
-                            "chunk_id": f"{doc_id}_chunk_{chunk_index}",
-                            "original_index": chunk_index,
-                            "content": chunk
-                        } for chunk_index, chunk in enumerate(chunks)
-                    ]
+            document_chunks = [
+                {
+                    "chunk_id": f"{doc_id}_chunk_{chunk_index}",
+                    "original_index": chunk_index,
+                    "content": chunk
+                } for chunk_index, chunk in enumerate(chunks)
+            ]
 
-                    documents.append({
-                        "doc_id": doc_id,
-                        "original_uuid": str(uuid.uuid4()),
-                        "content": doc_chunk,
-                        "chunks": document_chunks
-                    })
-            return documents
+            documents.append({
+                "doc_id": doc_id,
+                "original_uuid": str(uuid.uuid4()),
+                "content": doc_chunk,
+                "chunks": document_chunks
+            })
+
+        return documents
 
     def _save_documents_to_json(self, documents, filename):
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump(documents, f, ensure_ascii=False, indent=2)
 
-    def _situate_document(self,text):
-        print("implement here")
+    def _situate_document(self, documents):
+
+        sys_prompt = [{"text": "You are a helpful assistant that provides concise context for document chunks."}]
+        for document in documents:
+            doc_content = document['content']
+            for chunk in document['chunks']:
+                
+                doc_content=doc_content
+                document_context_prompt = f"""
+                <document>
+                {doc_content}
+                </document>
+                """
+
+                chunk_content=chunk['content']
+                chunk_context_prompt = f"""
+                Here is the chunk we want to situate within the whole document
+                <chunk>
+                {chunk_content}
+                </chunk>
+
+                Please give a short succinct context to situate this chunk within the overall document for the purposes of improving search retrieval of the chunk.
+                Answer only with the succinct context and nothing else.
+                """
+                usr_prompt = [{
+                        "role": "user", 
+                        "content": [
+                            {"text": document_context_prompt},
+                            {"text": document_context_prompt}
+                        ]
+                    }]
+
+                temperature = 0.5
+                top_p = 0.9
+                inference_config = {"temperature": temperature, "topP": top_p}
+
+                try:
+                    response = self.bedrock_client.converse(
+                        modelId=self.context_model,
+                        messages=usr_prompt, 
+                        system=sys_prompt,
+                        inferenceConfig=inference_config,
+                    )
+                    situated_context = response['output']['message']['content'][0]['text']
+                    chunk['contextual_content'] = situated_context.strip()
+                except Exception as e:
+                    logger.error(f"Error generating context for chunk: {e}")
+                    chunk['contextual_content'] = ""
+        return documents
+    
 
     def _embed_document(self, text):
         try:
@@ -409,30 +470,35 @@ class Context_Processor:
                 embedded_chunks = []
 
                 for chunk in document['chunks']:
-                    chunk_embedding = self._embed_document(chunk['content'])
+                    context = chunk['contextual_content'] if self.use_context_retrieval else chunk['content']
+                    chunk_embedding = self._embed_document(context)
                     if chunk_embedding:
+                        chunk_id = chunk['chunk_id']
+                        _id = f"{doc_id}_{chunk_id}"
                         embedded_chunk = {
                             "metadata": {
                                 "source": source_file_name, 
                                 "doc_id": doc_id,
-                                "chunk_id": chunk['chunk_id'],
+                                "chunk_id": chunk_id,
                                 "timestamp": datetime.now().isoformat()
                             },
                             "content": chunk['content'],
                             "content_embedding": chunk_embedding
                         }
+                        if self.use_context_retrieval:
+                            embedded_chunk["contextual_content"] = chunk['contextual_content']
                         embedded_chunks.append(embedded_chunk)
 
                         self.os_manager.client.index(
                             index=f"aws_{self.index_name}",
                             body=embedded_chunk
                         )
-            
+                        
                     embedded_documents.append({
-                        "doc_id": doc_id,
+                        "_id": _id,
                         "embedded_chunks": embedded_chunks
                     })
-
+                    
             with open(f"{self.index_name}_embedded_chunks.json", 'w', encoding='utf-8') as f:
                 json.dump(embedded_documents, f, ensure_ascii=False, indent=2)
 
@@ -443,6 +509,8 @@ class Context_Processor:
 
     def process_file(self, file, index_action, start_page=1, end_page=None):
         documents = self._load_and_split(file, start_page, end_page)
+        if self.use_context_retrieval:
+            documents = self._situate_document(documents)
         self._save_documents_to_json(documents, f"{self.index_name}_chunks.json")
         self.os_manager.create_index(self.index_name, index_action)
         self._embed_and_store(file.name)
