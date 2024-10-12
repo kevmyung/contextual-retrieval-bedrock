@@ -1,7 +1,8 @@
 # Contextual Retrieval with Amazon Bedrock and OpenSearch
 
-This project implements [Contextual Retrieval](https://www.anthropic.com/news/contextual-retrieval), as introduced by Anthropic, using Amazon Bedrock, Amazon OpenSearch Service and Cohere Reranker Model. It aims to enhance traditional RAG (Retrieval-Augmented Generation) by providing more comprehensive context for each chunk of information.
+This project implements [Contextual Retrieval](https://www.anthropic.com/news/contextual-retrieval), as introduced by Anthropic, using Amazon Bedrock, Amazon OpenSearch Service and Cohere Reranker Model. 
 
+**Note: Contextual Retrieval is a preprocessing technique that can be implemented without prompt caching, while prompt caching can improve cost-effectiveness and performance. The current implementation using Amazon Bedrock doesn't include prompt caching; it will be updated once Bedrock supports this feature in the future.
 
 ## What is Contextual Retrieval?
 - Problem: Traditional RAG often provides incomplete information due to chunk size limitations.
