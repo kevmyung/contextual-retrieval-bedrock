@@ -1,0 +1,8 @@
+streamlit
+pdfplumber
+python-dotenv
+boto3
+cohere
+requests
+opensearch-py
+pyyaml

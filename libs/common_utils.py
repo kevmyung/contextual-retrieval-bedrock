@@ -66,7 +66,7 @@ def parse_stream(stream):
 
 
 def get_model_settings(model_config):
-    with st.popover("Bedrock Settings"):
+    with st.popover("Bedrock Settings", use_container_width=True):
         model_name = st.selectbox('Chat Model 💬', list(model_config['models'].keys()), key='model_name')
         model_info = model_config['models'][model_name]
         model_info["region_name"] = st.selectbox("Bedrock Region 🤖", BEDROCK_REGIONS, key='bedrock_region')
@@ -116,7 +116,7 @@ def update_state(key):
 
 
 def search_toolbar():
-    with st.popover("Search Settings"):
+    with st.popover("Advanced Search", use_container_width=True):
         index_list = st.session_state.os_manager.index_list
         if index_list:
             selected_index = st.selectbox(
@@ -154,86 +154,86 @@ def search_toolbar():
             disabled=rank_fusion_disabled
         )
 
-        if st.session_state.rank_fusion and not rank_fusion_disabled:
-            st.number_input(
-                "Initial Search Results",
-                min_value=20,
-                max_value=500,
-                value=st.session_state.initial_search_results,
-                step=20,
-                key="initial_search_results_input",
-                help="Number of documents to retrieve in the initial search",
-                on_change=update_state,
-                args=("initial_search_results",)
-            )
+        with st.expander("Advanced Settings"):
+            if st.session_state.rank_fusion and not rank_fusion_disabled:
+                col1, col2, col3 = st.columns(3)
 
-            st.number_input(
-                "Hybrid Score Filter",
-                min_value=10,
-                max_value=st.session_state.initial_search_results,
-                value=min(st.session_state.hybrid_score_filter, st.session_state.initial_search_results),
-                step=10,
-                key="hybrid_score_filter_input",
-                help="Number of documents to keep after hybrid score filtering",
-                on_change=update_state,
-                args=("hybrid_score_filter",)
-            )
+                with col1:
+                    st.number_input(
+                        "Initial Retrieval",
+                        min_value=20,
+                        max_value=500,
+                        value=st.session_state.initial_search_results,
+                        step=20,
+                        key="initial_search_results_input",
+                        help="Number of documents to retrieve in the initial search",
+                        on_change=update_state,
+                        args=("initial_search_results",)
+                    )
 
-            st.number_input(
-                "Final Reranked Results",
-                min_value=1,
-                max_value=st.session_state.hybrid_score_filter,
-                value=min(st.session_state.final_reranked_results, st.session_state.hybrid_score_filter),
-                step=1,
-                key="final_reranked_results_input",
-                help="Number of documents to return after final reranking",
-                on_change=update_state,
-                args=("final_reranked_results",)
-            )
+                with col2:
+                    st.number_input(
+                        "Hybrid Retrieval",
+                        min_value=10,
+                        max_value=st.session_state.initial_search_results,
+                        value=min(st.session_state.hybrid_score_filter, st.session_state.initial_search_results),
+                        step=10,
+                        key="hybrid_score_filter_input",
+                        help="Number of documents to keep after hybrid score filtering",
+                        on_change=update_state,
+                        args=("hybrid_score_filter",)
+                    )
 
-            st.slider(
-                "KNN Weight",
-                min_value=0.0,
-                max_value=1.0,
-                value=st.session_state.knn_weight,
-                step=0.1,
-                key="knn_weight_input",
-                help="Weight for KNN score in hybrid scoring",
-                on_change=update_state,
-                args=("knn_weight",)
-            )
-            st.session_state.bm25_weight = 1 - st.session_state.knn_weight
+                with col3:
+                    st.number_input(
+                        "Final Ranked Results",
+                        min_value=1,
+                        max_value=st.session_state.hybrid_score_filter,
+                        value=min(st.session_state.final_reranked_results, st.session_state.hybrid_score_filter),
+                        step=1,
+                        key="final_reranked_results_input",
+                        help="Number of documents to return after final reranking",
+                        on_change=update_state,
+                        args=("final_reranked_results",)
+                    )
 
-        else:
-            st.number_input(
-                "Top-K Results",
-                min_value=1,
-                max_value=20,
-                value=st.session_state.top_k,
-                key="top_k_input",
-                on_change=update_state,
-                args=("top_k",)
-            )
+                st.slider(
+                    "KNN Weight",
+                    min_value=0.0,
+                    max_value=1.0,
+                    value=st.session_state.knn_weight,
+                    step=0.1,
+                    key="knn_weight_input",
+                    help="Weight for KNN score in hybrid scoring",
+                    on_change=update_state,
+                    args=("knn_weight",)
+                )
+                st.session_state.bm25_weight = 1 - st.session_state.knn_weight
 
-        st.info(f"Search will {'use rank fusion' if st.session_state.rank_fusion else 'retrieve top-k results'}.")
-        if st.session_state.rank_fusion:
-            st.info(f"Initial search: {st.session_state.initial_search_results} results")
-            st.info(f"After hybrid scoring: {st.session_state.hybrid_score_filter} results")
-            st.info(f"Final reranked results: {st.session_state.final_reranked_results} results")
-            st.info(f"KNN Weight: {st.session_state.knn_weight:.1f}, BM25 Weight: {st.session_state.bm25_weight:.1f}")
-        else:
-            st.info(f"Top-K results: {st.session_state.top_k}")
-
+            else:
+                st.number_input(
+                    "Top-K Results",
+                    min_value=1,
+                    max_value=20,
+                    value=st.session_state.top_k,
+                    key="top_k_input",
+                    on_change=update_state,
+                    args=("top_k",)
+                )
 
 def upload_toolbar(model_config, embed_model_id):
-    with st.popover("Upload and Process File"):
-        uploaded_file = st.file_uploader("Choose a PDF file", type=["pdf"])
-        # context_retrieval settings
+    with st.popover("Upload & Process File", use_container_width=True):
         use_context_retrieval = st.checkbox(
             "Use Context Retrieval", 
             value=False,
-            help="Enables contextual retrieval for more accurate results. \n\nWarning: Processing time increases significantly with file size."
+            help="Enables contextual retrieval for more accurate results."
         )
+
+        default_index_name = "contextual_test" if use_context_retrieval else "test"
+        base_index_name = st.text_input("Index Name", value=default_index_name)
+        index_name = f"contextual_{base_index_name}" if use_context_retrieval and not base_index_name.startswith("contextual_") else base_index_name
+
+        uploaded_file = st.file_uploader("Choose a PDF file", type=["pdf"])
 
         if use_context_retrieval:
             context_model = st.selectbox(
@@ -254,9 +254,7 @@ def upload_toolbar(model_config, embed_model_id):
                 on_change=update_state,
                 args=("max_document_len",)
             )
-            st.divider()
 
-        # chunking settings
         col1, col2 = st.columns(2)
         with col1:
             chunk_size = st.number_input(
@@ -281,11 +279,7 @@ def upload_toolbar(model_config, embed_model_id):
                 args=("overlap",)
             )
 
-        # index name settings
-        default_index_name = "contextual_default" if use_context_retrieval else "default"
-        base_index_name = st.text_input("Index Name", value=default_index_name)
-        index_name = f"contextual_{base_index_name}" if use_context_retrieval and not base_index_name.startswith("contextual_") else base_index_name
-        
+        # File processing options outside the popover
         if uploaded_file is not None:
             file_details = {"FileName": uploaded_file.name, "FileSize": uploaded_file.size}
             with pdfplumber.open(io.BytesIO(uploaded_file.getvalue())) as pdf:
@@ -297,34 +291,33 @@ def upload_toolbar(model_config, embed_model_id):
                 start_page = st.number_input("Start Page", min_value=1, max_value=total_pages, value=1)
             with col2:
                 end_page = st.number_input("End Page", min_value=start_page, max_value=total_pages, value=total_pages)
-            
+
             index_action = st.radio(
                 "If index already exists:",
                 ("Overwrite existing index", "Append to existing index")
             )
 
             if st.button("Process File"):
-                context_processor = Context_Processor(
-                    st.session_state.os_manager,
-                    embed_model_id,
-                    st.session_state.bedrock_region,
-                    index_name, 
-                    chunk_size, 
-                    overlap, 
-                    use_context_retrieval, 
-                    context_model=(context_model_id if use_context_retrieval else None),
-                    max_document_len=(max_document_len if use_context_retrieval else None)
-                )
                 if re.match(r'^[a-z0-9_]+$', index_name):
+                    context_processor = Context_Processor(
+                        st.session_state.os_manager,
+                        embed_model_id,
+                        st.session_state.bedrock_region,
+                        index_name, 
+                        chunk_size, 
+                        overlap, 
+                        use_context_retrieval, 
+                        context_model=(context_model_id if use_context_retrieval else None),
+                        max_document_len=(max_document_len if use_context_retrieval else None)
+                    )
                     with st.spinner("Processing file..."):
                         context_processor.process_file(uploaded_file, index_action, start_page=start_page, end_page=end_page)
                         st.success(f"File processed successfully! - {index_name}")
                 else:
                     st.error("Index name should contain only English letters (a-z), numbers, and '_'.")
 
-
 def evaluation_toolbar():
-    with st.popover("Evaluation Settings"):
+    with st.popover("Evaluation Setup", use_container_width=True):
         st.write("To be implemented...")
 
 
@@ -332,20 +325,13 @@ def create_toolbar():
     with st.sidebar:
         st.button("New Chat", on_click=new_chat, type="secondary")
 
-        st.subheader("Model Settings")
         model_config = load_model_config()
         model_info, embed_model_id, model_kwargs = get_model_settings(model_config)
 
-        st.divider()
-        st.subheader("Search Settings")
-        search_toolbar()
-
-        st.divider()
-        st.subheader("Pre-processing")
         upload_toolbar(model_config, embed_model_id)
 
-        st.divider()
-        st.subheader("Evaluation")
+        search_toolbar()
+
         evaluation_toolbar()
 
         return model_info, embed_model_id, model_kwargs
