@@ -492,8 +492,8 @@ class Context_Processor:
                         "embedded_chunks": embedded_chunks
                     })
                     
-            with open(f"{self.index_name}_embedded_chunks.json", 'w', encoding='utf-8') as f:
-                json.dump(embedded_documents, f, ensure_ascii=False, indent=2)
+            # with open(f"{self.index_name}_embedded_chunks.json", 'w', encoding='utf-8') as f:
+            #     json.dump(embedded_documents, f, ensure_ascii=False, indent=2)
 
             print(f"Successfully embedded and stored documents in index 'aws_{self.index_name}'")
         except Exception as e:
