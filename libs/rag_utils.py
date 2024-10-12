@@ -152,15 +152,6 @@ class OpenSearch_Manager:
             logger.error(f"An error occurred during search: {e}")
             return []
 
-
-    def get_index_embedding_model(self, index_name):
-        try:
-            index_settings = self.client.indices.get_settings(index=index)
-            return index_settings[index]['settings']['index'].get('embedding_model')
-        except Exception as e:
-            print(f"Error getting embedding model for index '{index}': {e}")
-            return None
-
     def search_by_knn(self, vector, index_name, top_n=80):
         query = {
             "size": top_n,
@@ -267,8 +258,10 @@ class OpenSearch_Manager:
             {"content": doc['content'], "metadata": doc['metadata']} for doc in hybrid_results
         ]
 
-        # Rerank the documents
+        # Rerank the documents -> return ranked indices
         reranked_results = self._rerank_documents(query_text, documents_for_rerank, final_reranked_results)
+
+        # Prepare final results
         if reranked_results and isinstance(reranked_results, dict) and 'results' in reranked_results:
             final_results = []
             for reranked_doc in reranked_results['results']:
@@ -427,8 +420,8 @@ class Context_Processor:
                         ]
                     }]
 
-                temperature = 0.5
-                top_p = 0.9
+                temperature = 0.0
+                top_p = 0.1
                 inference_config = {"temperature": temperature, "topP": top_p}
 
                 try:

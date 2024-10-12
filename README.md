@@ -1,6 +1,6 @@
 # Contextual Retrieval with Amazon Bedrock and OpenSearch
 
-This project implements [Contextual Retrieval](https://www.anthropic.com/news/contextual-retrieval), as introduced by Anthropic, using Amazon Bedrock and Amazon OpenSearch Service. It aims to enhance traditional RAG (Retrieval-Augmented Generation) by providing more comprehensive context for each chunk of information.
+This project implements [Contextual Retrieval](https://www.anthropic.com/news/contextual-retrieval), as introduced by Anthropic, using Amazon Bedrock, Amazon OpenSearch Service and Cohere Reranker Model. It aims to enhance traditional RAG (Retrieval-Augmented Generation) by providing more comprehensive context for each chunk of information.
 
 
 ## What is Contextual Retrieval?
