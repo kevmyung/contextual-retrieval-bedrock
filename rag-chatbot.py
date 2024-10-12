@@ -2,10 +2,7 @@ import streamlit as st
 import boto3
 from libs.common_utils import initialize_session_state, create_toolbar, handle_ai_response
 
-TOP_K = 5
 MAX_MESSAGE_HISTORY = 10
-DUMMY_SEARCH_RESULT = [{"index": 1, "content": "This is a dummy search result content.", "source": "Dummy Source 1", "score": 0.95}]
-
 st.set_page_config(page_title='Bedrock AI Chatbot', page_icon="🤖", layout="wide")
 st.title("🤖 Bedrock AI Chatbot")
 
