@@ -52,7 +52,7 @@ Note: Costs may vary significantly depending on prompt and document length.
 
 - Amazon Bedrock Manual documents (Total 50 Q&A)
 
-<img src="images/contextual_vs_standard_comparison.png" alt="search" width="800"/>
+<img src="images/contextual_vs_standard_comparison.png" alt="result" width="800"/>
 
 ## Installation
 
