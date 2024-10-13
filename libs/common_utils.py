@@ -45,7 +45,6 @@ def initialize_session_state():
 
     if st.session_state.search_target is None and st.session_state.os_manager.index_list:
         st.session_state.search_target = st.session_state.os_manager.index_list[0]
-        st.session_state.os_manager.set_content_field(st.session_state.search_target)
 
 def load_model_config():
     file_dir = os.path.dirname(os.path.abspath(__file__))
@@ -127,7 +126,6 @@ def search_toolbar():
             )
             if selected_index != st.session_state.search_target:
                 st.session_state.search_target = selected_index
-                st.session_state.os_manager.set_content_field(selected_index)
         else:
             st.warning("No search indices available. Please upload and process a file first.")
             st.session_state.search_target = None

@@ -22,7 +22,6 @@ class OpenSearch_Manager:
         self.client = self._init_opensearch()
         self.prefix = prefix 
         self.index_list = self._get_indices()
-        self.content_field = 'content'
 
     def _init_opensearch(self):
         try:
@@ -41,9 +40,6 @@ class OpenSearch_Manager:
         except Exception as e:
             logger.error(f"Error initializing OpenSearch: {e}")
             return None
-
-    def set_content_field(self, index_name):
-        self.content_field = 'contextual_content' if 'contextual_' in index_name else 'content'
 
     def _get_mappings(self):
         mapping = {
@@ -67,10 +63,6 @@ class OpenSearch_Manager:
                         }
                     },
                     "content": {
-                        "type": "text",
-                        "analyzer": "standard"
-                    },
-                    "contextual_content": {
                         "type": "text",
                         "analyzer": "standard"
                     },
@@ -141,7 +133,7 @@ class OpenSearch_Manager:
             results = []
             for hit in response['hits']['hits']:
                 result = {
-                    "content": hit['_source'][self.content_field],
+                    "content": hit['_source']["content"],
                     "score": hit['_score'],
                     "metadata": hit['_source']['metadata'],
                     "search_method": query['query'].get('knn', 'bm25')
@@ -155,7 +147,7 @@ class OpenSearch_Manager:
     def search_by_knn(self, vector, index_name, top_n=80):
         query = {
             "size": top_n,
-            "_source": [self.content_field, "metadata"],
+            "_source": ["content", "metadata"],
             "query": {
                 "knn": {
                     "content_embedding": {
@@ -173,10 +165,10 @@ class OpenSearch_Manager:
     def search_by_bm25(self, query_text, index_name, top_n=80):
         query = {
             "size": top_n,
-            "_source": [self.content_field, "metadata"],
+            "_source": ["content", "metadata"],
             "query": {
                 "match": {
-                    self.content_field: {
+                    "content": {
                         "query": query_text,
                         "operator": "or"
                     }
@@ -301,9 +293,7 @@ class Context_Processor:
         self.index_name = index_name
         self.chunk_size = chunk_size
         self.use_context_retrieval = use_context_retrieval 
-        self.overlap = overlap
-        if use_context_retrieval == True:
-            self.overlap = 0 
+        self.overlap = overlap 
         self.context_model = context_model 
         self.max_document_len = max_document_len
         self.bedrock_client = self._init_bedrock_client(bedrock_region)
@@ -359,10 +349,12 @@ class Context_Processor:
                 full_text += text + " "
 
         if self.use_context_retrieval and self.max_document_len:
+            logger.info(f"Starting document splitting with max_document_len: {self.max_document_len}")
             doc_chunks = self._split_into_chunks(full_text, self.max_document_len, 0)
         else:
             doc_chunks = [full_text]
-
+            logger.info(f"Document splitting has been skipped.")
+        
         for doc_index, doc_chunk in enumerate(doc_chunks):
             doc_id = f"doc_{doc_index+1}"
             chunks = self._split_into_chunks(doc_chunk, self.chunk_size, self.overlap)
@@ -381,7 +373,8 @@ class Context_Processor:
                 "content": doc_chunk,
                 "chunks": document_chunks
             })
-
+            logger.info(f"Chunking of doc_{doc_index+1} has been completed.")
+        
         return documents
 
     def _save_documents_to_json(self, documents, filename):
@@ -389,39 +382,54 @@ class Context_Processor:
             json.dump(documents, f, ensure_ascii=False, indent=2)
 
     def _situate_document(self, documents):
+        logger.info(f"Starting to situate {len(documents)} documents")
+        total_token_usage = {"inputTokens": 0, "outputTokens": 0, "totalTokens": 0}
+        documents_token_usage = {}
 
-        sys_prompt = [{"text": "You are a helpful assistant that provides concise context for document chunks."}]
-        for document in documents:
+        sys_prompt = [{"text": """
+        You're an expert at providing a succinct context, targeted for specific text chunks.
+
+        <instruction>
+        - Offer 1-5 short sentences that explain what specific information this chunk provides within the document.
+        - Focus on the unique content of this chunk, avoiding general statements about the overall document.
+        - Clarify how this chunk's content relates to other parts of the document and its role in the document.
+        - If there's essential information in the document that backs up this chunk's key points, mention the details.
+        </instruction>
+        """}]
+
+        for doc_index, document in enumerate(documents, 1):
+            logger.info(f"Processing document {doc_index}/{len(documents)}")
             doc_content = document['content']
-            for chunk in document['chunks']:
-                
-                doc_content=doc_content
+
+            doc_token_usage = {"inputTokens": 0, "outputTokens": 0, "totalTokens": 0}
+            
+            for chunk in document['chunks']:                
                 document_context_prompt = f"""
                 <document>
                 {doc_content}
                 </document>
                 """
 
-                chunk_content=chunk['content']
+                chunk_content = chunk['content']
                 chunk_context_prompt = f"""
-                Here is the chunk we want to situate within the whole document
+                Here is the chunk we want to situate within the whole document:
+
                 <chunk>
                 {chunk_content}
                 </chunk>
 
-                Please give a short succinct context to situate this chunk within the overall document for the purposes of improving search retrieval of the chunk.
-                Answer only with the succinct context and nothing else.
+                Skip the preamble and only provide the consise context.
                 """
                 usr_prompt = [{
                         "role": "user", 
                         "content": [
                             {"text": document_context_prompt},
-                            {"text": document_context_prompt}
+                            {"text": chunk_context_prompt}
                         ]
                     }]
 
                 temperature = 0.0
-                top_p = 0.1
+                top_p = 0.5
                 inference_config = {"temperature": temperature, "topP": top_p}
 
                 try:
@@ -431,11 +439,36 @@ class Context_Processor:
                         system=sys_prompt,
                         inferenceConfig=inference_config,
                     )
-                    situated_context = response['output']['message']['content'][0]['text']
-                    chunk['contextual_content'] = situated_context.strip()
+                    situated_context = response['output']['message']['content'][0]['text'].strip()
+                    chunk['content'] = f"Context:\n{situated_context}\n\nChunk:\n{chunk['content']}"
+
+                    if 'usage' in response:
+                        usage = response['usage']
+                        for key in ['inputTokens', 'outputTokens', 'totalTokens']:
+                            doc_token_usage[key] += usage.get(key, 0)
+                            total_token_usage[key] += usage.get(key, 0)
+
                 except Exception as e:
                     logger.error(f"Error generating context for chunk: {e}")
-                    chunk['contextual_content'] = ""
+
+            documents_token_usage[f"document_{doc_index}"] = doc_token_usage
+            logger.info(f"Completed processing document {doc_index}/{len(documents)}")
+            logger.info(f"Document {doc_index} token usage - Input: {doc_token_usage['inputTokens']}, "
+                        f"Output: {doc_token_usage['outputTokens']}, Total: {doc_token_usage['totalTokens']}")
+
+        logger.info(f"Total token usage - Input: {total_token_usage['inputTokens']}, "
+                    f"Output: {total_token_usage['outputTokens']}, "
+                    f"Total: {total_token_usage['totalTokens']}")
+
+        token_usage_data = {
+            "total_usage": total_token_usage,
+            "documents_usage": documents_token_usage
+        }
+
+        with open(f"{self.index_name}_token_usage.json", 'w') as f:
+            json.dump(token_usage_data, f, indent=4)
+        logger.info(f"Token usage saved to {self.index_name}_token_usage.json")
+
         return documents
     
 
@@ -463,7 +496,7 @@ class Context_Processor:
                 embedded_chunks = []
 
                 for chunk in document['chunks']:
-                    context = chunk['contextual_content'] if self.use_context_retrieval else chunk['content']
+                    context = chunk['content']
                     chunk_embedding = self._embed_document(context)
                     if chunk_embedding:
                         chunk_id = chunk['chunk_id']
@@ -478,8 +511,6 @@ class Context_Processor:
                             "content": chunk['content'],
                             "content_embedding": chunk_embedding
                         }
-                        if self.use_context_retrieval:
-                            embedded_chunk["contextual_content"] = chunk['contextual_content']
                         embedded_chunks.append(embedded_chunk)
 
                         self.os_manager.client.index(
@@ -492,9 +523,6 @@ class Context_Processor:
                         "embedded_chunks": embedded_chunks
                     })
                     
-            # with open(f"{self.index_name}_embedded_chunks.json", 'w', encoding='utf-8') as f:
-            #     json.dump(embedded_documents, f, ensure_ascii=False, indent=2)
-
             print(f"Successfully embedded and stored documents in index 'aws_{self.index_name}'")
         except Exception as e:
             print(f"Error embedding and storing documents: {e}")
