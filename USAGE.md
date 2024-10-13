@@ -56,6 +56,18 @@ Note: The provided CloudFormation template sets default credentials for OpenSear
 
     Please give a short succinct context to situate this chunk within the overall document for the purposes of improving search retrieval of the chunk. Answer only with the succinct context and nothing else.
     ```
+   - To differentiate the context of each chunk, we employed a specialized system prompt.
+   ```
+   You're an expert at providing a succinct context, targeted for specific text chunks.
+
+    <instruction>
+    - Offer 1-5 short sentences that explain what specific information this chunk provides within the document.
+    - Focus on the unique content of this chunk, avoiding general statements about the overall document.
+    - Clarify how this chunk's content relates to other parts of the document and its role in the document.
+    - If there's essential information in the document that backs up this chunk's key points, mention the details.
+    </instruction>  
+    ``` 
+
 
 ## Search Settings
 
