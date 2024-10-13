@@ -3,11 +3,25 @@ import re
 import os
 import yaml
 import json
+import boto3
+import jsonschema
+from tqdm import tqdm
 import streamlit as st
 import pdfplumber
 import logging
+from datasets import Dataset
 from dotenv import load_dotenv
-from libs.rag_utils import Context_Processor, OpenSearch_Manager
+from libs.rag_utils import(
+    Context_Processor, 
+    OpenSearch_Manager
+)
+from libs.custom_ragas import (
+    evaluate,
+    AnswerRelevancy, 
+    Faithfulness, 
+    ContextRecall,
+    ContextPrecision
+)
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -101,11 +115,20 @@ def get_model_settings(model_config):
                 args=("top_p",)
             )
 
-        return model_info, embed_model_id, {
+        model_kwargs = {
             "temperature": temperature,
             "top_p": top_p,
             "max_tokens": 4096,
-            "system_prompt": "You are a helpful AI assistant. Your task is to provide accurate and relevant answers based on the given context.\n",
+            "system_prompt": "You are a helpful AI assistant. Your task is to provide accurate and relevant answers based solely on the given context. Do not use any prior knowledge or information that is not provided in the context. If the information is not available in the given context, please state that you don't have enough information to answer the question.\n",
+        }
+
+        bedrock_client = boto3.client('bedrock-runtime', region_name=model_info["region_name"])
+
+        return {
+            "model_info": model_info,
+            "embed_model_id": embed_model_id,
+            "model_kwargs": model_kwargs,
+            "bedrock_client": bedrock_client
         }
 
 
@@ -314,9 +337,57 @@ def upload_toolbar(model_config, embed_model_id):
                 else:
                     st.error("Index name should contain only English letters (a-z), numbers, and '_'.")
 
-def evaluation_toolbar():
-    with st.popover("Evaluation Setup", use_container_width=True):
-        st.write("To be implemented...")
+
+def evaluation_toolbar(model_settings):
+    with st.popover("Evaluation Setup (RAGAS)", use_container_width=True):
+        metrics = st.multiselect(
+            "Select Metrics",
+            ["AnswerRelevancy", "Faithfulness", "ContextRecall", "ContextPrecision"],
+            default=["AnswerRelevancy", "Faithfulness", "ContextRecall", "ContextPrecision"],
+            key="evaluation_metrics"
+        )
+
+        ab_test = st.checkbox("A/B Test", value=False, key="ab_test")
+        if ab_test:
+            col1, col2 = st.columns(2)
+            with col1:
+                index_a = st.selectbox("Index A", st.session_state.os_manager.index_list, key="index_a")
+            with col2:
+                index_b = st.selectbox("Index B", st.session_state.os_manager.index_list, key="index_b")
+            test_indices = [index_a, index_b]
+        else:
+            test_index = st.selectbox("Select Test Index", st.session_state.os_manager.index_list, key="test_index", help="All other settings follow the options set in the Bedrock/Search tab.")
+            test_indices = [test_index]
+
+        uploaded_file = st.file_uploader(
+            "Upload Evaluation File (JSONL)", 
+            type=["jsonl"], 
+            help="The JSONL file should follow the RAGAS evaluation format and include 'question', 'ground_truth' fields."
+        )
+
+        if st.button("Run Evaluation"):
+            if uploaded_file is not None:
+                try:
+                    for index_name in test_indices:
+                        with st.spinner(f'Evaluation in Progress... ({index_name})'):
+                            uploaded_file.seek(0)
+                            result_file = ragas_evaluation(
+                                model_settings["bedrock_client"],
+                                model_settings["model_info"]["model_id"],
+                                model_settings["model_kwargs"],
+                                model_settings["embed_model_id"],
+                                uploaded_file,
+                                index_name,
+                                st.session_state.evaluation_metrics
+                            )
+                            if result_file:
+                                st.success(f"Evaluation completed for {index_name}. Results saved to {result_file}")
+                    st.success("All evaluations completed successfully.")
+                except Exception as e:
+                    st.error(f"An error occurred during evaluation: {str(e)}")
+                    st.exception(e)
+            else:
+                st.error("Please upload a JSONL file for evaluation.")
 
 
 def create_toolbar():
@@ -324,15 +395,15 @@ def create_toolbar():
         st.button("New Chat", on_click=new_chat, type="secondary")
 
         model_config = load_model_config()
-        model_info, embed_model_id, model_kwargs = get_model_settings(model_config)
+        model_settings = get_model_settings(model_config)
 
-        upload_toolbar(model_config, embed_model_id)
+        upload_toolbar(model_config, model_settings["embed_model_id"])
 
         search_toolbar()
 
-        evaluation_toolbar()
+        evaluation_toolbar(model_settings)
 
-        return model_info, embed_model_id, model_kwargs
+        return model_settings
 
 
 def build_valid_message_history(messages, max_length):
@@ -414,7 +485,7 @@ def invoke_model(bedrock_client, model_id, message_history, model_kwargs, histor
     return parse_stream(response['stream'])
 
 
-def retrieve_search_results(question, bedrock_client, embed_model_id):
+def retrieve_search_results(question, bedrock_client, embed_model_id, index_name=None):
     if not st.session_state.search_target:
         st.warning("No search target (index) selected. Please upload and process a file, then select a search target.")
         return []
@@ -425,7 +496,8 @@ def retrieve_search_results(question, bedrock_client, embed_model_id):
     )
     embedding = json.loads(response['body'].read())['embedding']
 
-    index_name = f"aws_{st.session_state.search_target}"
+    if index_name == None:
+        index_name = f"aws_{st.session_state.search_target}"
 
     if st.session_state.rank_fusion:
         search_result = st.session_state.os_manager.search_by_rank_fusion(
@@ -492,3 +564,96 @@ def handle_ai_response(question, bedrock_client, model_id, model_kwargs, embed_m
                 st.session_state.messages.append({"role": "assistant", "content": ai_answer})
             except ValueError as e:
                 st.error(str(e))
+
+def validate_jsonl(file):
+    schema = {
+        "type": "object",
+        "properties": {
+            "question": {"type": "string"},
+            "ground_truth": {"type": "string"},
+            "answer": {"type": "string"}
+        },
+        "required": ["question", "ground_truth"]
+    }
+
+    valid_data = []
+    for line in file:
+        try:
+            item = json.loads(line)
+            jsonschema.validate(instance=item, schema=schema)
+            valid_data.append(item)
+        except (json.JSONDecodeError, jsonschema.exceptions.ValidationError) as e:
+            st.error(f"Invalid data format: {e}")
+            return None
+    return valid_data
+
+def batch_answer_generation(bedrock_client, model_id, model_kwargs, embed_model_id, history_length, valid_data, index_name):
+    results = []
+    for item in tqdm(valid_data, desc="Processing items"):
+        question = item['question']
+        search_result = retrieve_search_results(question, bedrock_client, embed_model_id, index_name)
+        message_history = [{"role": "user", "content": question}]
+
+        try:
+            response = invoke_model(bedrock_client, model_id, message_history, model_kwargs, history_length, search_result)
+            answer = "".join(response) 
+        except ValueError as e:
+            st.error(f"Error generating answer: {str(e)}")
+            answer = "Error: Failed to generate answer"
+
+        result = {
+            'question': question,
+            'ground_truth': item['ground_truth'],
+            'answer': answer,
+            'retrieved_contexts': [result.get('content', '') for result in search_result]
+        }
+        results.append(result)
+
+    return results
+
+def ragas_evaluation(bedrock_client, model_id, model_kwargs, embed_model_id, uploaded_file, index_name, selected_metrics):
+    valid_data = validate_jsonl(uploaded_file)
+    if not valid_data:
+        return
+    
+    generated_answer = f"qa_results_{index_name}.jsonl"
+    history_length = 1
+    results = batch_answer_generation(bedrock_client, model_id, model_kwargs, embed_model_id, history_length, valid_data, index_name=f"aws_{index_name}")
+
+    with open(generated_answer, 'w') as f:
+        for item in results:
+            f.write(json.dumps(item) + '\n')
+
+    updated_dataset = Dataset.from_list(results)
+    metrics_map = {
+        "AnswerRelevancy": AnswerRelevancy,
+        "Faithfulness": Faithfulness,
+        "ContextRecall": ContextRecall,
+        "ContextPrecision": ContextPrecision
+    }
+    metrics = [metrics_map[metric] for metric in selected_metrics if metric in metrics_map]
+
+    def map_dataset(example):
+        return {
+            "user_input": example["question"],
+            "retrieved_contexts": example["retrieved_contexts"],
+            "response": example["answer"],
+            "reference": example["ground_truth"]
+        }    
+
+    dataset = updated_dataset.map(map_dataset)
+    region = st.session_state.bedrock_region
+    evaluation_results = evaluate(dataset, metrics, model_id, embed_model_id, region)
+    st.write("Average Scores:")
+    st.write(evaluation_results['average_scores'])
+    
+    json_results = {
+        'average_scores': evaluation_results['average_scores'],
+        'detailed_results': evaluation_results['detailed_results']
+    }
+    json_filename = f"ragas_results_{index_name}.json"
+
+    with open(json_filename, 'w', encoding='utf-8') as f:
+        json.dump(json_results, f, ensure_ascii=False, indent=4)
+
+    return json_filename

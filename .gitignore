@@ -6,4 +6,6 @@ __pycache__/
 .env
 data/
 *.json
+*.jsonl
 *.txt
+sample/*

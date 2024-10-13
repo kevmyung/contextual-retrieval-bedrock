@@ -5,7 +5,6 @@ import uuid
 import json
 import boto3
 import logging
-import cohere
 import requests
 from datetime import datetime
 from botocore.config import Config

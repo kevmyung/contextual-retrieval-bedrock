@@ -6,7 +6,7 @@ This project implements [Contextual Retrieval](https://www.anthropic.com/news/co
 - Problem: Traditional RAG often provides incomplete information due to chunk size limitations.
 - Solution: Provide the entire document as context along with each chunk to create chunk-specific context.
 
-## Note on Contextual Retrieval and Prompt Caching:**
+## Note on Contextual Retrieval and Prompt Caching:
 Contextual Retrieval is a preprocessing technique that can be implemented without prompt caching. While prompt caching can improve cost-effectiveness and performance, __the current implementation using Amazon Bedrock does not include this feature__. Prompt caching support will be added in future updates when Bedrock makes it available.
 
 In our tests processing the entire manual for Amazon Bedrock (1600+ pages, https://d1jp7kj5nqor8j.cloudfront.net/bedrock-manual.pdf) with the Claude 3 Haiku model in us-west-2, the preprocessing costs were under $20 even without prompt caching. However, generating the situated context took approximately 5 times longer without using asynchronous calls.
@@ -19,19 +19,40 @@ Sample usage statistics:
 Note: Costs may vary significantly depending on prompt and document length.
 
 
-## Key Features
-
-#### Short Demo : Normal RAG vs Contextual Retrieval RAG
-<img src="./images/sample.gif" alt=" Chat" width="800"/>
+## Key Features (Demo.)
 
 - Streamlit-based chatbot application using Bedrock's LLM and embedding models
 - Multi-turn conversations with chat history
+
+#### Preprocessing
+
 - PDF upload and preprocessing support in the chat interface
 - OpenSearch integration for storing preprocessed chunks
+
+<img src="https://d1jp7kj5nqor8j.cloudfront.net/preprocessing.gif" alt="preprocess" width="600"/>
+
+#### Searching
+
 - Hybrid Search implementation using KNN and BM25 scores
 - Reranking with Cohere Rerank 3 Nimble model deployed on Amazon SageMaker
 - Rank fusion implementation
 - API Gateway and Lambda configuration for serving the Rerank API
+
+<img src="https://d1jp7kj5nqor8j.cloudfront.net/searching.gif" alt="search" width="600"/>
+
+#### Evaluation (RAGAS)
+
+- Evaluation based on RAGAS metrics
+    - Answer Relevancy / Faithfulness / Context Recall / Context Precision
+
+<img src="https://d1jp7kj5nqor8j.cloudfront.net/evaluation.gif" alt="evaluation" width="600"/>
+
+
+## Test Results
+
+- Amazon Bedrock Manual documents (Total 50 Q&A)
+
+<img src="images/contextual_vs_standard_comparison.png" alt="search" width="800"/>
 
 ## Installation
 

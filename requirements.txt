@@ -6,3 +6,5 @@ cohere
 requests
 opensearch-py
 pyyaml
+numpy
+datasets

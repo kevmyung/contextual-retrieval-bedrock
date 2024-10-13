@@ -31,14 +31,14 @@ Note: The provided CloudFormation template sets default credentials for OpenSear
 
 ## Bedrock Configuration
 
-1. In the browser, click on 'Bedrock Settings' in the Model Settings tab.
+1. In the browser, click 'Bedrock Settings.'
 2. Select the Bedrock region.
 3. Choose the chat model and embedding model.
 4. Adjust Temperature and Top-P to control answer patterns.
 
 ## Document Preprocessing
 
-1. Click 'Upload and Process File' in the Pre-processing tab.
+1. Click 'Upload & Process File.'
 2. Upload a PDF document (start with shorter documents, <10 pages).
 3. Specify an index name for storing processed data.
 4. Select preprocessing options:
@@ -71,12 +71,21 @@ Note: The provided CloudFormation template sets default credentials for OpenSear
 
 ## Search Settings
 
-1. Click 'Search Settings' in the Search Settings tab.
+1. Click 'Search Settings.'
 2. Specify the index name to use for searching.
 3. Set the Top-K option for the context window.
 4. Decide whether to use Rank Fusion:
    - If selected, adjust the number of documents to filter at each stage.
 
+## Evaluation Setup
+
+1. Click 'Evaluation Setup (RAGAS).'
+2. Select Evaluation Metrics.
+3. Specify the index name to use for evaluation.
+4. Upload the Test dataset (Question and Ground Truth) 
+   - Refer to [rag-evalution-bedrock](https://github.com/kevmyung/rag-evaluation-bedrock) repository.
+5. Click 'Run Evaluation'
+6. Wait for evaluation to be completed.
 
 ## Performing Searches
 
