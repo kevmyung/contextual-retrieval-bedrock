@@ -51,6 +51,10 @@ Note: Costs may vary significantly depending on prompt and document length.
 ## Test Results
 
 - Amazon Bedrock Manual documents (Total 50 Q&A)
+    - 1600+ pages
+    - 25 Complex Q&A / 25 Simple Q&A
+    - Top-K = 5
+    - Rank-Fusion (Hybrid Search + Reranker)
 
 <img src="images/contextual_vs_standard_comparison.png" alt="result" width="800"/>
 
