@@ -9,7 +9,7 @@ This project implements [Contextual Retrieval](https://www.anthropic.com/news/co
 ## Note on Contextual Retrieval and Prompt Caching:**
 Contextual Retrieval is a preprocessing technique that can be implemented without prompt caching. While prompt caching can improve cost-effectiveness and performance, __the current implementation using Amazon Bedrock does not include this feature__. Prompt caching support will be added in future updates when Bedrock makes it available.
 
-In our tests processing the entire manual for Amazon Bedrock (1600+ pages, https://d1jp7kj5nqor8j.cloudfront.net/bedrock-manual.pdf) with the Claude 3 Haiku model in us-west-2, the preprocessing costs were under $20 even without prompt caching. However, generating the situated context cost about 5 times more. 
+In our tests processing the entire manual for Amazon Bedrock (1600+ pages, https://d1jp7kj5nqor8j.cloudfront.net/bedrock-manual.pdf) with the Claude 3 Haiku model in us-west-2, the preprocessing costs were under $20 even without prompt caching. However, generating the situated context took approximately 5 times longer without using asynchronous calls.
 
 Sample usage statistics:
 - Input Tokens: 58,573,002 (Cost: $14.64)
