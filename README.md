@@ -33,17 +33,18 @@ Note: Costs may vary significantly depending on prompt and document length.
 
 #### Searching
 
-- Hybrid Search implementation using KNN and BM25 scores
-- Reranking with Cohere Rerank 3 Nimble model deployed on Amazon SageMaker
 - Rank fusion implementation
-- API Gateway and Lambda configuration for serving the Rerank API
+    - Hybrid Search implementation using KNN and BM25 scores
+    - API Gateway and Lambda configuration for serving the Rerank API
+    - Reranking with Cohere Rerank 3 Nimble model deployed on Amazon SageMaker
 
-<img src="https://d1jp7kj5nqor8j.cloudfront.net/searching.gif" alt="search" width="600"/>
+<img src="https://d1jp7kj5nqor8j.cloudfront.net/searching.gif" alt="searching" width="600"/>
 
 #### Evaluation (RAGAS)
 
 - Evaluation based on RAGAS metrics
     - Answer Relevancy / Faithfulness / Context Recall / Context Precision
+- The evaluation time increases proportionally with the number of metrics being evaluated and the number of rows in the evaluation dataset.
 
 <img src="https://d1jp7kj5nqor8j.cloudfront.net/evaluation.gif" alt="evaluation" width="600"/>
 
@@ -79,13 +80,3 @@ streamlit run rag-chatbot.py
 3. Configure Bedrock settings, preprocess documents, and adjust search settings as needed
 
 For detailed instructions on setup and usage, please refer to [USAGE.md](USAGE.md).
-
-## How It Works
-
-Contextual Retrieval addresses limitations in traditional RAG by providing chunk-specific context from the entire document. This approach uses a prompt to generate concise context for each chunk, improving search retrieval accuracy.
-
-Key optimizations include:
-- Prompt caching for efficient token usage
-- Hybrid Search and Reranker integration
-
-For more information on the implementation and concepts, see [USAGE.md](USAGE.md).
