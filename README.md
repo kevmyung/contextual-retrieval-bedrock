@@ -38,7 +38,7 @@ Note: Costs may vary significantly depending on prompt and document length.
     - API Gateway and Lambda configuration for serving the Rerank API
     - Reranking with Cohere Rerank 3 Nimble model deployed on Amazon SageMaker
 
-<img src="https://d1jp7kj5nqor8j.cloudfront.net/searching.gif" alt="searching" width="600"/>
+<img src="images/searching.gif" alt="searching" width="600"/>
 
 #### Evaluation (RAGAS)
 
