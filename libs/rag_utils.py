@@ -176,35 +176,59 @@ class OpenSearch_Manager:
         }
         return self._search(query, index_name, top_n)
 
-    def _rerank_documents(self, question, documents, top_k=20):
-        rerank_api_url = os.getenv('RERANK_API_URL')
-        payload = {
-            "documents": documents,
-            "query": question,
-            "rank_fields": ["content"],
-            "top_n": top_k
-        }
-
-        headers = {
-            "Content-Type": "application/json"
-        }
+    def _rerank_documents(self, question, documents, region, model_id, top_k=20):
+        bedrock_agent_runtime = boto3.client('bedrock-agent-runtime', region_name=region)
+        model_package_arn = f"arn:aws:bedrock:{region}::foundation-model/{model_id}"
+        text_sources = []
+        for doc in documents:
+            text_sources.append({
+                "type": "INLINE",
+                "inlineDocumentSource": {
+                    "type": "TEXT",
+                    "textDocument": {
+                        "text": doc['content'],
+                    }
+                }
+            })
 
         try:
-            response = requests.post(rerank_api_url, json=payload, headers=headers)
-
-            if response.status_code == 200:
-                result = response.json()
-                return result 
-            else:
-                logger.error(f"Error: API failed (status code: {response.status_code})")
-                logger.error(f"response: {response.text}")
-                return None
+            logger.info('start reranking')
+            response = bedrock_agent_runtime.rerank(
+                queries=[
+                    {
+                        "type": "TEXT",
+                        "textQuery": {
+                            "text": question
+                        }
+                    }
+                ],
+                sources=text_sources,
+                rerankingConfiguration={
+                    "type": "BEDROCK_RERANKING_MODEL",
+                    "bedrockRerankingConfiguration": {
+                        "numberOfResults": top_k,
+                        "modelConfiguration": {
+                            "modelArn": model_package_arn,
+                        }
+                    }
+                }
+            )
+            results = {
+                "results": [
+                    {
+                        "index": result['index'],
+                        "relevance_score": result['relevanceScore']
+                    } for result in response['results']
+                ]
+            }
+            return results
 
         except Exception as e:
             logger.error(f"Error in _rerank_documents: {str(e)}")
             return None
 
-    def search_by_rank_fusion(self, query_text, vector, index_name, initial_search_results=160, hybrid_score_filter=40, final_reranked_results=20, knn_weight=0.6):
+    def search_by_rank_fusion(self, query_text, vector, index_name, rerank_region="us-west-2", rerank_model_id="cohere.rerank-v3-5:0", 
+                              initial_search_results=160, hybrid_score_filter=40, final_reranked_results=20, knn_weight=0.6):
         half_initial = initial_search_results // 2
         knn_results = self.search_by_knn(vector, index_name, half_initial)
         bm25_results = self.search_by_bm25(query_text, index_name, half_initial)
@@ -250,7 +274,7 @@ class OpenSearch_Manager:
         ]
 
         # Rerank the documents -> return ranked indices
-        reranked_results = self._rerank_documents(query_text, documents_for_rerank, final_reranked_results)
+        reranked_results = self._rerank_documents(query_text, documents_for_rerank, rerank_region, rerank_model_id, final_reranked_results)
 
         # Prepare final results
         if reranked_results and isinstance(reranked_results, dict) and 'results' in reranked_results:

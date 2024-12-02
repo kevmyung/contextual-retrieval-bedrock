@@ -231,6 +231,24 @@ def search_toolbar():
                 )
                 st.session_state.bm25_weight = 1 - st.session_state.knn_weight
 
+                st.selectbox(
+                    "Rerank Model ID",
+                    options=["cohere.rerank-v3-5:0", "amazon.rerank-v1:0"],
+                    key="rerank_model_id_input",
+                    help="Select the rerank model ID",
+                    on_change=update_state,
+                    args=("rerank_model_id",)
+                )
+
+                st.selectbox(
+                    "Rerank Region",
+                    options=["us-west-2", "ap-northeast-1"],
+                    key="rerank_region_input",
+                    help="Select the rerank region",
+                    on_change=update_state,
+                    args=("rerank_region",)
+                )
+
             else:
                 st.number_input(
                     "Top-K Results",
@@ -504,6 +522,8 @@ def retrieve_search_results(question, bedrock_client, embed_model_id, index_name
             query_text=question,
             vector=embedding,
             index_name=index_name,
+            rerank_region=st.session_state.rerank_region_input, 
+            rerank_model_id=st.session_state.rerank_model_id_input,
             initial_search_results=st.session_state.initial_search_results,
             hybrid_score_filter=st.session_state.hybrid_score_filter,
             final_reranked_results=st.session_state.final_reranked_results,

@@ -1,33 +1,19 @@
 # Detailed Usage Guide
 
-## Vector Store and Reranker Model Setup
+## Vector Store Setup
 
 1. Deploy Amazon OpenSearch Service:
    - Use the `manifest/setup-opensearch.yaml` file in CloudFormation to deploy a public OpenSearch domain.
 
-2. Deploy Cohere Rerank Nimble 3 model:
-   - Subscribe to the model in the [AWS Marketplace](https://aws.amazon.com/marketplace/pp/prodview-ea3rcr6y56jp2?sr=0-2&ref_=beagle&applicationId=AWS-Marketplace-Console).
-   - Deploy the model to automatically create a SageMaker Endpoint.
-
-3. Connect the rerank model to API Gateway:
-   - Create a Lambda function to handle Cohere Rerank model calls and responses.
-   - Use `manifest/lambda_handler.py` as a reference for the Lambda function configuration.
-   - Ensure the Lambda execution role has permissions for the SageMaker Endpoint.
-   - Create a REST API in API Gateway with a `/predict` resource and connect it to the Lambda function as a POST API.
-
-
-## Environment Setup
-
+2. Create a `.env` file with the following format:
 ```
-Create a `.env` file with the following format:
 OPENSEARCH_HOST=https://...es.amazonaws.com 
 OPENSEARCH_USER=raguser 
 OPENSEARCH_PASSWORD=MarsEarth1! 
 OPENSEARCH_REGION=us-east-1 
-RERANK_API_URL=https://....execute-api.us-east-1.amazonaws.com/v1/predict
 ```
 
-Note: The provided CloudFormation template sets default credentials for OpenSearch. Modify these as needed.
+Note: The provided CloudFormation template sets default credentials for OpenSearch. Modify these as needed. The reranking functionality is now directly supported by Amazon Bedrock since re:Invent 2024, eliminating the need for separate model deployment and API setup.
 
 ## Bedrock Configuration
 
